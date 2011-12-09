@@ -1,0 +1,131 @@
+%
+% Background picture for cover
+%
+\newcommand\BackgroundPic{
+\put(0,0){
+\parbox[b][\paperheight]{\paperwidth}{%
+% \vfill
+% \centering
+\includegraphics[height=22cm]{\COMMON/pso_cover.eps}%
+\vfill
+}}}
+
+%
+% Headers and Footers
+%
+\title{\thetitle}
+\author{\theauthor}
+\lhead{}
+\chead{}
+\rhead{\thetitle}
+
+\lfoot{}
+\cfoot{\footnotesize 2011 VMware, All rights reserved.\\
+ VMware Professional Services and \customer\ Confidential\\
+\thepage}
+\rfoot{}
+\pagestyle{fancy}
+
+%
+% Cover Page
+%
+\À¾Îñ
+\newcommand{\CoverPage}{%
+ \begin{titlepage}
+  \AddToShipoutPicture*{\BackgroundPic}
+
+
+  \vspace*{8cm}
+  \begin{minipage}[t]{13cm}
+  \begin{flushleft}
+    \color{white}
+    {\LARGE  
+     \textbf{\thetitle}\\}
+
+  \vspace{.2cm}
+    {\Large \textbf{version \version}} \\
+
+  \vspace{2cm}
+    Prepared for: \\
+    \vspace{.2cm}
+    {\LARGE \textbf{\customer}}
+   \end{flushleft}
+   \end{minipage}
+
+   \vspace*{7cm}
+
+   \begin{flushleft}
+   {Pr__epared by:\\
+    \vspace{.2cm}
+    \theauthor, Senior Consultant \\
+    VMware Professional Service \\
+    \email \\
+    \today
+   }
+   \end{flushleft}
+  \end{titlepage}
+}
+
+%
+% NoticeAndDisclaimers
+%
+
+\newcommand{\NandDPage}{%
+\pagenumbering{roman}
+\vspace*{1cm}
+\begin{spacing}{1.2}
+\footnotesize
+{\copyright} 2008 VMware, Inc. All rights reserved. Protected by one or more 
+of U.S. Patent Nos. 6,397,242, 6,496,847, 6,704,925, 6,711,672, 6,725,289, 
+6,735,601, 6,785,886, 6,789,156, 6,795,966, 6,880,022, 6,944,699, 6,961,806, 
+6,961,941, 7,069,413, 7,082,598, 7,089,377, 7,111,086, 7,111,145, 7,117,481, 
+7,149,843, 7,155,558, 7,222,221, 7,260,815, 7,260,820, 7,269,683, 7,275,136, 
+7,277,998, 7,277,999, 7,278,030, 7,281,102, 7,290,253 and 7,356,679; patents 
+pending. VMware, the VMware ``boxes'' logo and design, Virtual SMP and VMotion
+are registered trademarks or trademarks of VMware, Inc. in the United
+States and/or other jurisdictions. All other marks and names mentioned
+herein may be trademarks of their respective companies.
+\end{spacing}
+
+\subsubsection*{Notices and Disclaimers:}
+\begin{spacing}{1.2}
+\footnotesize 
+VMware warrants that this report and assessment services used to create this 
+report were performed in a reasonable manner using generally accepted 
+industry standards and practices. THE EXPRESS WARRANTY SET FORTH ABOVE IS IN 
+LIEU OF ALL OTHER WARRANTIES, EXPRESS, IMPLIED, STATUTORY OR OTHERWISE WITH 
+RESPECT TO THE SERVICES AND DELIVERABLES PROVIDED BY VMWARE, OR AS TO THE 
+RESULTS WHICH MAY BE OBTAINED THEREFROM, AND VMWARE DISCLAIMS ALL IMPLIED 
+WARRANTIES OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE. VMWARE 
+WILL NOT BE LIABLE FOR ANY THIRD-PARTY SERVICES OR PRODUCTS IDENTIFIED OR 
+REFERRED TO CUSTOMER BY VMWARE. VMWARE WILL NOT BE LIABLE FOR ANY LOST 
+PROFITS OR BUSINESS OPPORTUNITIES, LOSS OF USE, BUSINESS INTERRUPTION, LOSS 
+OF DATA, OR ANY OTHER INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL 
+DAMAGES ARISING UNDER THIS AGREEMENT UNDER ANY THEORY OF LIABILITY, WHETHER 
+BASED IN CONTRACT, TORT, NEGLIGENCE, PRODUCT LIABILITY OR OTHERWISE, 
+REGARDLESS OF WHETHER VMWARE HAS BEEN ADVISED OF THE POSSIBILITY OF SUCH 
+DAMAGES. VMWARE'S AGGREGATE LIABILITY UNDER THIS AGREEMENT WILL NOT, IN ANY 
+EVENT, EXCEED THE FEES PAID BY CUSTOMER TO VMWARE UNDER THIS AGREEMENT. All 
+materials provided under this service are copyrighted by VMware ("Health 
+Check Materials"). VMware grants the customer of this service a license to 
+use and make reasonable internal company copies of any Health Check 
+Materials strictly for the purpose of facilitating such company's 
+understanding, utilization and operation of its licensed VMware product(s). 
+Except as set forth expressly in the sentence above, there is no transfer of 
+any intellectual property rights or any other license granted under the 
+terms of this service. If Customer issued a purchase order or other ordering 
+document, the terms and conditions of which are in addition to or 
+inconsistent with the terms and conditions of this Agreement, the terms and 
+conditions of such purchase order or other ordering document will not be 
+binding and will not modify this Agreement.
+\end{spacing}
+
+\subsubsection*{VMware, Inc}
+\begin{flushleft}
+3401 Hillview Ave \\
+Palo Alto, CA 94304 \\
+\underline {www.vmware.com}
+\end{flushleft}
+}
+
+\newcommand{\CellNeedInfo}{\cellcolor[rgb]{1,1,0.5}}
