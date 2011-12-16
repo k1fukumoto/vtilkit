@@ -28,19 +28,20 @@ Function SheetName_ESX(pref, host)
 ' Do some tricks to make the sheet name shorter enough, when needed.
 ' Following line is one of the example which extracts the host name part from FQDN.
 '    arr = Split(host, ".")
+'    SheetName_ESX = pref & arr(0)
     SheetName_ESX = pref & host
 End Function
 
 Sub DeployNewBook()
-    dataroot = range("DATAROOT")
-    destpath = range("CAPMGMTPATH")
-    destbase = range("CAPMGMTBOOK")
+    dataroot = Range("DATAROOT")
+    destpath = Range("CAPMGMTPATH")
+    destbase = Range("CAPMGMTBOOK")
 
     tmpl = ActiveWorkbook.name
     
     clusters = ListSubdirs(dataroot & "\cluster\")
     For Each C In clusters
-        destsheet = destbase & "-" & C & ".xls"
+        destsheet = destbase & "-" & C & ".xlsx"
         Workbooks(tmpl).Sheets(Array("CONSOLE-<cluster>", "CLSTR-<cluster>", "CLSTRDATA-<cluster>")).Copy
         ActiveWorkbook.SaveAs Filename:=destpath & "\" & destsheet
         Call DeployCluster(dataroot, C)
@@ -53,6 +54,11 @@ Sub DeployNewBook()
             Call DeployESX(dataroot, C, esx)
             prev = SheetName_ESX("ESXPERF-", esx)
         Next esx
+        
+        ActiveWorkbook.Save
+        ActiveWorkbook.Close
+        Workbooks.Open Filename:=destpath & "\" & destsheet, UpdateLinks:=0
+        
     Next C
 End Sub
 
@@ -72,20 +78,12 @@ Sub DeployCluster(dataroot, cluster)
     
     Sheets("CLSTRDATA-" & cluster).Visible = False
 End Sub
-Sub test()
-    dataroot = "c:\kaoru\DK\VTIL\SampleData\vCenterFJ\data"
-    cluster = "VS_cluster"
 
- '   Call RefreshCLSTRDATA(dataroot, cluster)
-    Call RefreshCLSTR("<cluster>")
-    
-
-End Sub
 
 Sub AddQueryTable(path, r, name, dtypes)
     With ActiveSheet.QueryTables.Add(Connection:= _
         "TEXT;" & path _
-        , Destination:=range(r))
+        , Destination:=Range(r))
         .name = name
         .FieldNames = True
         .RowNumbers = False
@@ -122,7 +120,7 @@ Sub RefreshCLSTRDATA(dataroot, cluster)
         Array("B201:G250", "disk_4weeks", "\disk.usage.average\4weeks_latest.csv", Array(1, 1, 1, 1, 1)), _
         Array("B251:F305", "cpu_breakdown", "\vm_cpu_breakdown.csv", Array(1, 1, 1, 1, 1)) _
     )
-        range(gdef(0)).Select
+        Range(gdef(0)).Select
         Selection.QueryTable.Delete
         Selection.ClearContents
     
@@ -135,8 +133,11 @@ End Sub
 Sub RefreshCLSTR(cluster)
     
     ActiveSheet.ChartObjects("CPUMEM").Activate
-    ActiveChart.SeriesCollection(1).XValues = _
-        "='CLSTRDATA-" & cluster & "'!R3C2:R93C2"
+    
+    For i = 1 To 5
+        ActiveChart.SeriesCollection(i).XValues = _
+            "='CLSTRDATA-" & cluster & "'!R3C2:R93C2"
+    Next i
     
     ActiveChart.SeriesCollection(1).name = "='CLSTRDATA-" & cluster & "'!R2C27"
     ActiveChart.SeriesCollection(1).Values = _
@@ -162,7 +163,9 @@ Sub RefreshCLSTR(cluster)
         "キャパシティ分析グラフ (クラスタレベル: CPU / メモリ使用率 / Power ON VM数)" & Chr(10) & cluster
     
     ActiveSheet.ChartObjects("MEMVM").Activate
-    ActiveChart.SeriesCollection(1).XValues = "='CLSTRDATA-" & cluster & "'!R3C2:R93C2"
+    For i = 1 To 4
+        ActiveChart.SeriesCollection(i).XValues = "='CLSTRDATA-" & cluster & "'!R3C2:R93C2"
+    Next i
     
     ActiveChart.SeriesCollection(1).name = "='CLSTRDATA-" & cluster & "'!R2C23"
     ActiveChart.SeriesCollection(1).Values = "='CLSTRDATA-" & cluster & "'!R3C23:R93C23"
@@ -178,31 +181,29 @@ Sub RefreshCLSTR(cluster)
     ActiveChart.ChartTitle.Text = _
         "キャパシティ分析グラフ (クラスタレベル: メモリ使用量/ 仮想マシン当りのメモリ使用量)" & Chr(10) & cluster
 
-    ActiveSheet.ChartObjects("MEMPERF").Activate
-    ActiveChart.SeriesCollection(1).XValues = _
-        "='CLSTRDATA-" & cluster & "'!R3C2:R93C2"
-        
-    ActiveChart.SeriesCollection(1).name = "='CLSTRDATA-" & cluster & "'!R2C11"
-    ActiveChart.SeriesCollection(1).Values = "='CLSTRDATA-" & cluster & "'!R3C11:R93C11"
+' Drop balloon, swap graph from cluster view
+'    ActiveSheet.ChartObjects("MEMPERF").Activate
+'    ActiveChart.SeriesCollection(1).XValues = _
+'        "='CLSTRDATA-" & cluster & "'!R3C2:R93C2"
+            
+'    ActiveChart.SeriesCollection(1).name = "='CLSTRDATA-" & cluster & "'!R2C6"
+'    ActiveChart.SeriesCollection(1).Values = "='CLSTRDATA-" & cluster & "'!R3C6:R93C6"
     
-    ActiveChart.SeriesCollection(2).name = "='CLSTRDATA-" & cluster & "'!R2C12"
-    ActiveChart.SeriesCollection(2).Values = "='CLSTRDATA-" & cluster & "'!R3C12:R93C12"
-    
-    ActiveChart.SeriesCollection(3).name = "='CLSTRDATA-" & cluster & "'!R2C6"
-    ActiveChart.SeriesCollection(3).Values = "='CLSTRDATA-" & cluster & "'!R3C6:R93C6"
-    
-    ActiveChart.ChartTitle.Text = _
-        "キャパシティ分析グラフ (クラスタレベル: バルーン / スワップ メモリ / Power ON VM数)" & Chr(10) & cluster
+'    ActiveChart.ChartTitle.Text = _
+'        "キャパシティ分析グラフ (クラスタレベル: Power ON VM搭載メモリ総量)" & Chr(10) & cluster
                
     r0 = 102
-    r1 = range("'CLSTRDATA-" & cluster & "'!" & "R100").Value + r0 - 1
+    r1 = Range("'CLSTRDATA-" & cluster & "'!" & "R100").Value + r0 - 1
     r0 = "R" & r0
     r1 = "R" & r1
     
     ActiveSheet.ChartObjects("CPU").Activate
-    ActiveChart.SeriesCollection(1).XValues = _
-        "='CLSTRDATA-" & cluster & "'!" & r0 & "C2:" & r1 & "C2"
-        
+    
+    For i = 1 To 4
+        ActiveChart.SeriesCollection(i).XValues = _
+            "='CLSTRDATA-" & cluster & "'!" & r0 & "C2:" & r1 & "C2"
+    Next i
+    
     ActiveChart.SeriesCollection(1).Values = _
         "='CLSTRDATA-" & cluster & "'!" & r0 & "C21:" & r1 & "C21"
     ActiveChart.SeriesCollection(2).Values = _
@@ -215,13 +216,15 @@ Sub RefreshCLSTR(cluster)
         "キャパシティ分析グラフ (クラスタレベル: ESXホスト毎のCPU使用率)" & Chr(10) & cluster
     
     r0 = 152
-    r1 = range("'CLSTRDATA-" & cluster & "'!" & "R150").Value + r0 - 1
+    r1 = Range("'CLSTRDATA-" & cluster & "'!" & "R150").Value + r0 - 1
     r0 = "R" & r0
     r1 = "R" & r1
     
     ActiveSheet.ChartObjects("Memory").Activate
-    ActiveChart.SeriesCollection(1).XValues = _
-        "='CLSTRDATA-" & cluster & "'!" & r0 & "C2:" & r1 & "C2"
+    For i = 1 To 4
+        ActiveChart.SeriesCollection(i).XValues = _
+            "='CLSTRDATA-" & cluster & "'!" & r0 & "C2:" & r1 & "C2"
+    Next i
     
     ActiveChart.SeriesCollection(1).Values = _
         "='CLSTRDATA-" & cluster & "'!" & r0 & "C21:" & r1 & "C21"
@@ -235,14 +238,16 @@ Sub RefreshCLSTR(cluster)
         "キャパシティ分析グラフ (クラスタレベル: ESXホスト毎のメモリ使用率)" & Chr(10) & cluster
     
     r0 = 202
-    r1 = range("'CLSTRDATA-" & cluster & "'!" & "R200").Value + r0 - 1
+    r1 = Range("'CLSTRDATA-" & cluster & "'!" & "R200").Value + r0 - 1
     r0 = "R" & r0
     r1 = "R" & r1
     
     ActiveSheet.ChartObjects("Disk").Activate
-    ActiveChart.SeriesCollection(1).XValues = _
-        "='CLSTRDATA-" & cluster & "'!" & r0 & "C2:" & r1 & "C2"
-        
+    For i = 1 To 4
+        ActiveChart.SeriesCollection(i).XValues = _
+            "='CLSTRDATA-" & cluster & "'!" & r0 & "C2:" & r1 & "C2"
+    Next i
+    
     ActiveChart.SeriesCollection(1).Values = _
         "='CLSTRDATA-" & cluster & "'!" & r0 & "C6:" & r1 & "C6"
     ActiveChart.SeriesCollection(2).Values = _
@@ -255,8 +260,12 @@ Sub RefreshCLSTR(cluster)
         "キャパシティ分析グラフ (クラスタレベル: ESXホスト毎のディスク使用量)" & Chr(10) & cluster
     
     ActiveSheet.ChartObjects("CPU Breakdown").Activate
-    ActiveChart.SeriesCollection(1).XValues = _
-        "='CLSTRDATA-" & cluster & "'!R252C2:R255C2"
+    
+    For i = 1 To 4
+        ActiveChart.SeriesCollection(i).XValues = _
+            "='CLSTRDATA-" & cluster & "'!R252C2:R255C2"
+    Next i
+    
     ActiveChart.SeriesCollection(1).Values = _
         "='CLSTRDATA-" & cluster & "'!R252C18:R255C18"
     ActiveChart.SeriesCollection(2).Values = _
@@ -292,89 +301,32 @@ Sub DeployESX(dataroot, cluster, esx)
 End Sub
 
 Sub RefreshESXDATA(dataroot, cluster, esx)
+
+    For Each gdef In Array( _
+        Array("B1:K100", "cpu_memory", "\cpu_memory.csv", Array(5, 1, 1, 1, 1)), _
+        Array("B101:K200", "memory", "\memory.csv", Array(5, 1, 1, 1, 1, 1, 1, 1, 1)), _
+        Array("B201:K300", "disk", "\disk.csv", Array(5, 1, 1, 1, 1, 1)), _
+        Array("B301:K400", "net", "\net.csv", Array(5, 1, 1, 1, 1, 1)) _
+    )
+        Range(gdef(0)).Select
+        Selection.QueryTable.Delete
+        Selection.ClearContents
     
-    range("B2").Select
-    With Selection.QueryTable
-        .Connection = _
-        "TEXT;" & dataroot & "\cluster\" & cluster & "\host\" & esx & "\cpu_memory.csv"
-        .TextFilePlatform = 932
-        .TextFileStartRow = 1
-        .TextFileParseType = xlDelimited
-        .TextFileTextQualifier = xlTextQualifierDoubleQuote
-        .TextFileConsecutiveDelimiter = False
-        .TextFileTabDelimiter = True
-        .TextFileSemicolonDelimiter = False
-        .TextFileCommaDelimiter = True
-        .TextFileSpaceDelimiter = False
-        .TextFileColumnDataTypes = Array(5, 1, 1, 1, 1)
-        .TextFileTrailingMinusNumbers = True
-        .TextFilePromptOnRefresh = False
-        .Refresh BackgroundQuery:=False
-    End With
-    
-    range("B102").Select
-    With Selection.QueryTable
-        .Connection = _
-        "TEXT;" & dataroot & "\cluster\" & cluster & "\host\" & esx & "\memory.csv"
-        .TextFilePlatform = 932
-        .TextFileStartRow = 1
-        .TextFileParseType = xlDelimited
-        .TextFileTextQualifier = xlTextQualifierDoubleQuote
-        .TextFileConsecutiveDelimiter = False
-        .TextFileTabDelimiter = True
-        .TextFileSemicolonDelimiter = False
-        .TextFileCommaDelimiter = True
-        .TextFileSpaceDelimiter = False
-        .TextFileColumnDataTypes = Array(5, 1, 1, 1, 1, 1, 1, 1, 1)
-        .TextFileTrailingMinusNumbers = True
-        .TextFilePromptOnRefresh = False
-        .Refresh BackgroundQuery:=False
-    End With
-    
-    range("B202").Select
-    With Selection.QueryTable
-        .Connection = _
-        "TEXT;" & dataroot & "\cluster\" & cluster & "\host\" & esx & "\disk.csv"
-        .TextFilePlatform = 932
-        .TextFileStartRow = 1
-        .TextFileParseType = xlDelimited
-        .TextFileTextQualifier = xlTextQualifierDoubleQuote
-        .TextFileConsecutiveDelimiter = False
-        .TextFileTabDelimiter = True
-        .TextFileSemicolonDelimiter = False
-        .TextFileCommaDelimiter = True
-        .TextFileSpaceDelimiter = False
-        .TextFileColumnDataTypes = Array(5, 1, 1, 1, 1, 1)
-        .TextFileTrailingMinusNumbers = True
-        .TextFilePromptOnRefresh = False
-        .Refresh BackgroundQuery:=False
-    End With
-    
-    range("B302").Select
-    With Selection.QueryTable
-        .Connection = _
-        "TEXT;" & dataroot & "\cluster\" & cluster & "\host\" & esx & "\net.csv"
-        .TextFilePlatform = 932
-        .TextFileStartRow = 1
-        .TextFileParseType = xlDelimited
-        .TextFileTextQualifier = xlTextQualifierDoubleQuote
-        .TextFileConsecutiveDelimiter = False
-        .TextFileTabDelimiter = True
-        .TextFileSemicolonDelimiter = False
-        .TextFileCommaDelimiter = True
-        .TextFileSpaceDelimiter = False
-        .TextFileColumnDataTypes = Array(5, 1, 1, 1, 1, 1)
-        .TextFileTrailingMinusNumbers = True
-        .TextFilePromptOnRefresh = False
-        .Refresh BackgroundQuery:=False
-    End With
+        path = dataroot & "\cluster\" & cluster & "\host\" & esx & gdef(2)
+        Call AddQueryTable(path, gdef(0), gdef(1), gdef(3))
+        
+    Next gdef
 End Sub
+
  
 Sub RefreshESX(esx)
     esxdata = SheetName_ESX("ESXDATA-", esx)
     
     ActiveSheet.ChartObjects("グラフ 1").Activate
-    ActiveChart.SeriesCollection(1).XValues = "='" & esxdata & "'!R2C2:R93C2"
+    For i = 1 To 4
+        ActiveChart.SeriesCollection(i).XValues = "='" & esxdata & "'!R2C2:R93C2"
+    Next i
+    
     ActiveChart.SeriesCollection(1).name = "='" & esxdata & "'!R1C4"
     ActiveChart.SeriesCollection(1).Values = "='" & esxdata & "'!R2C4:R93C4"
     ActiveChart.SeriesCollection(2).name = "='" & esxdata & "'!R1C6"
@@ -388,8 +340,12 @@ End Sub
 
 Sub RefreshESXPERF(esx)
     esxdata = SheetName_ESX("ESXDATA-", esx)
-
+    
     ActiveSheet.ChartObjects("グラフ 1").Activate
+    For i = 1 To 7
+        ActiveChart.SeriesCollection(i).XValues = "='" & esxdata & "'!R102C2:R193C2"
+    Next i
+    
     ActiveChart.SeriesCollection(1).name = "='" & esxdata & "'!R101C3"
     ActiveChart.SeriesCollection(1).Values = "='" & esxdata & "'!R102C3:R193C3"
     ActiveChart.SeriesCollection(2).name = "='" & esxdata & "'!R101C5"
@@ -404,10 +360,13 @@ Sub RefreshESXPERF(esx)
     ActiveChart.SeriesCollection(6).Values = "='" & esxdata & "'!R102C8:R193C8"
     ActiveChart.SeriesCollection(7).name = "='" & esxdata & "'!R101C9"
     ActiveChart.SeriesCollection(7).Values = "='" & esxdata & "'!R102C9:R193C9"
-    ActiveChart.SeriesCollection(1).XValues = "='" & esxdata & "'!R102C2:R193C2"
     ActiveChart.ChartTitle.Text = "キャパシティ分析グラフ (ESXホストレベル: メモリ関連)" & Chr(10) & esx
     
     ActiveSheet.ChartObjects("グラフ 2").Activate
+    For i = 1 To 4
+        ActiveChart.SeriesCollection(i).XValues = "='" & esxdata & "'!R202C2:R293C2"
+    Next i
+    
     ActiveChart.SeriesCollection(1).Select
     ActiveChart.SeriesCollection(1).name = "='" & esxdata & "'!R201C3"
     ActiveChart.SeriesCollection(1).Values = "='" & esxdata & "'!R202C3:R293C3"
@@ -417,10 +376,13 @@ Sub RefreshESXPERF(esx)
     ActiveChart.SeriesCollection(3).Values = "='" & esxdata & "'!R202C13:R293C13"
     ActiveChart.SeriesCollection(4).name = "='" & esxdata & "'!R201C8"
     ActiveChart.SeriesCollection(4).Values = "='" & esxdata & "'!R202C8:R293C8"
-    ActiveChart.SeriesCollection(1).XValues = "='" & esxdata & "'!R202C2:R293C2"
     ActiveChart.ChartTitle.Text = "キャパシティ分析グラフ (ESXホストレベル: データストア関連)" & Chr(10) & esx
     
     ActiveSheet.ChartObjects("グラフ 3").Activate
+    For i = 1 To 5
+        ActiveChart.SeriesCollection(i).XValues = "='" & esxdata & "'!R302C2:R393C2"
+    Next i
+    
     ActiveChart.SeriesCollection(1).name = "='" & esxdata & "'!R301C3"
     ActiveChart.SeriesCollection(1).Values = "='" & esxdata & "'!R302C3:R393C3"
     ActiveChart.SeriesCollection(2).name = "='" & esxdata & "'!R301C5"
@@ -431,7 +393,6 @@ Sub RefreshESXPERF(esx)
     ActiveChart.SeriesCollection(4).Values = "='" & esxdata & "'!R302C14:R393C14"
     ActiveChart.SeriesCollection(5).name = "='" & esxdata & "'!R301C15"
     ActiveChart.SeriesCollection(5).Values = "='" & esxdata & "'!R302C15:R393C15"
-    ActiveChart.SeriesCollection(1).XValues = "='" & esxdata & "'!R302C2:R393C2"
     ActiveChart.ChartTitle.Text = "キャパシティ分析グラフ (ESXホストレベル: ネットワーク関連)" & Chr(10) & esx
     
 End Sub

@@ -13,14 +13,15 @@
 #######################################################################################
 
 # Install location
-$VTILROOT = 'e:\VTILLAB'
+$VTILROOT = 'C:\VTILLAB\SVN'
 # vCenter name or IP address
-$VTILVC = "VC41f-1"
+$VTILVC = "172.16.180.30"
 # vCenter data collection user name
-$VTILVCUSER = "kfukumoto"
+$VTILVCUSER = "Administrator"
 
 # Data archive information
-$VTILDATA = "$VTILROOT\data"
+$VTILDATA = "C:\VTILLAB\1.5\data"
+$VTILVIEW = "C:\VTILLAB\1.5\view"
 # Target performance counters
 $VTILDBINFO = "$VTILROOT\etc\counters.xml"
 # Log file location

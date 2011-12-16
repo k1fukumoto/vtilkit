@@ -23,7 +23,10 @@ $LOG = "$VTILLOG\dumpperfdata.log"
 # CONTROLS
 #
 $SINCEDAYS = 2
-#$INIT = 1
+$INIT = 0
+if ($args[0] -eq "-init") {
+	$INIT = 1
+}
 
 #
 # IMPORTS
@@ -45,14 +48,27 @@ function dump_perf_data_impl($dir,$ci,$counter,$intvl) {
 	
 	if($INIT -eq 1) {$SINCEDAYS = 94}
 	$start = (Get-date).AddDays(-1 * $SINCEDAYS)
-	$ci | Get-Stat -Stat $counter -IntervalMins $INTERVAL[$intvl] -start $start | % {
-		if (($counter -like 'cpu*' -and $_.Instance -ne "" -and $_.Instance -ne "*") -or
-			($counter -like 'cpu*' -and $_.Value -le 0) -or
-			$_.Value -lt 0) {
+	
+	$ctr,$inst=$counter.split("_")
+	if($inst -eq $Null) {
+		$ci | Get-Stat -Stat $counter -IntervalMins $INTERVAL[$intvl] -start $start | % {
+			if (($counter -like 'cpu*' -and $_.Instance -ne "" -and $_.Instance -ne "*") -or
+				($counter -like 'cpu*' -and $_.Value -le 0) -or
+				$_.Value -lt 0) {
+			}
+			else {
+			  "{0},{1}" -f $_.Timestamp, $_.Value | Out-File $file -Append -Encoding ASCII
+			}		
 		}
-		else {
-		  "{0},{1}" -f $_.Timestamp, $_.Value | Out-File $file -Append -Encoding ASCII
-		}		
+	} else {
+		$ci | Get-Stat -Stat $ctr -Instance $inst -IntervalMins $INTERVAL[$intvl] -start $start | % {
+			if (($counter -like 'cpu*' -and $_.Value -le 0) -or 
+			     $_.Value -lt 0) {
+			}
+			else {
+			  "{0},{1}" -f $_.Timestamp, $_.Value | Out-File $file -Append -Encoding ASCII
+			}		
+		}
 	}
 }
 
@@ -78,7 +94,9 @@ function dump_esx_info($file,$cluster,$esx) {
 }
 
 function dump_host_data()  {
-	Get-Cluster | % {
+	$clstrs = Get-Cluster
+	if (!$clstrs) { $clstrs = Get-Datacenter }
+	$clstrs | % {
 		$cluster = $_
 		$cluster | Get-VMHost | % {
 			$esx = $_			
@@ -97,7 +115,9 @@ function dump_host_data()  {
 }
 
 function dump_vm_data()  {
-	Get-Cluster | % {
+	$clstrs = Get-Cluster
+	if (!$clstrs) { $clstrs = Get-Datacenter }
+	$clstrs | % {
 		$cluster = $_
 		$cluster | Get-VMHost | % {
 			$esx = $_			

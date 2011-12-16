@@ -3,11 +3,9 @@
 \newcommand{\thetitle}{VTIL 稼働統計分析サンプルツール -- インストールガイド}
 \newcommand{\theauthor}{Kaoru Fukumoto}
 \newcommand{\email}{kfukumot@vmware.com}
-\newcommand{\version}{1.3}
-% \newcommand{\customer}{大和総研殿}
-% \newcommand{\customer}{住信情報サービス殿}
-%\newcommand{\customer}{キヤノン株式会社殿}
+\newcommand{\version}{1.6}
 \newcommand{\customer}{CUSTOMER}
+
 \newcommand{\COMMON}{../../common}
 
 \input{\COMMON/packages}
@@ -31,6 +29,21 @@
 
 2010/10/05 & 1.3 & 福本　薫 & 
 提供パッケージ形態に合わせてインストール手順を更新\\
+
+2010/11/23 & 1.4 & 福本　薫 & 
+初期データ収集オプションを明記\\
+
+2011/3/3 & 1.5 & 福本　薫 & 
+dataフォルダーとviewフォルダーの分離\\
+
+2011/4/5 & 1.5.1 & 福本　薫 & 
+インストールディレクトリ表記の統一。「データの更新」ボタンに関する記述を削除（最新のバージョンでは使用用途がないため）\\
+
+2011/4/28 & 1.5.2 & 福本　薫 & 
+IPアドレス形式ホスト名のワークアラウンドを別ファイルとして保持。rollupdata.ps1の引数の説明を追加。\\
+
+2011/5/27 & 1.6 & 福本　薫 & 
+クラスタが存在しない環境ではデータセンタオブジェクトを代用。\\
 
 \hline
 \end{tabular}
@@ -93,13 +106,7 @@
  \item .NETランタイム(3.5 SP1)のインストール
  \item Windows PowerShellのインストール
  \item VMware vSphere PowerCLIのインストール
-\end{enumerate}
-
-必要に応じて、スクリプトのカスタマイズやデバッグ作業を容易に行うために、
-PowerShellスクリプトの簡易エディタをインストールします。
-
-\begin{enumerate}
- \item PowerGUIのインストール
+ \item （オプション：スクリプトのデバッグが必要な場合）PowerGUIのインストール
 \end{enumerate}
 
 \subsection{サンプルスクリプトのインストール} 
@@ -108,9 +115,7 @@ PowerShellスクリプトの簡易エディタをインストールします。
 ルすると仮定します。
 
 \begin{enumerate}
- \item {\tt E:/}の下に、{\tt VTILLAB-<version>.zip}の中の{\tt
-       VTILLAB-<version>}フォルダを展開。以下{\tt \$VTILROOT}を{\tt
-       E:/VTILLAB-<version>}として使用します。
+ \item {\tt E:/}の下に、{\tt VTILLAB-<version>.zip}の中の{\tt VTILLAB-<version>}フォルダを展開後、{\tt E:/VTILLAB}にリネーム。以下{\tt \$VTILROOT}を{\tt E:/VTILLAB}として使用します。
 
  \item 必要に応じて、スクリプトファイルのブロックの解除
        \begin{enumerate}
@@ -120,15 +125,17 @@ PowerShellスクリプトの簡易エディタをインストールします。
  \item ローカルスクリプトファイルの実行を許可。PowerShellプロンプトから
        以下のコマンドを実行
 \begin{verbatim}
-PS E:\VTILLAB> Set-ExecutionPolicy RemoteSigned
+PS E:\VTILLAB Set-ExecutionPolicy RemoteSigned
 \end{verbatim}
 
- \item {\tt \$VTILROOT/bin/CONFIG.ps1}を編集。必ず設定が必要になるのは
-       以下の3項目。
+ \item {\tt \$VTILROOT/bin/CONFIG.ps1}を編集。必ず設定が必要になるのは以下の3項目。
 
 \begin{verbatim}
+# ツールをインストールしたディレクトリ
 $VTILROOT = 'e:\VTILLAB'
+# データ収集先vCenterのホスト名もしくはIPアドレス
 $VTILVC = 'vCenter4'
+# データ収集用アカウント名。パスワードは次の手順で暗号化の上、認証ファイルに保存。
 $VTILVCUSER = 'kfukumoto'
 \end{verbatim}
 
@@ -147,51 +154,75 @@ PS E:\VTILLAB\bin> .\createcred.ps1
 認します。
 
 \begin{enumerate}
- \item {\tt \$VTILROOT/bin/dumpperfdata.ps1}を右クリックし、{\tt 編集}を選択
-
- \item デバック＞実行／続行を選択
+ \item PowerShellからデータ収集スクリプト({\tt dumpperfdata.ps1})を実行
+\begin{verbatim}
+PS E:\VTILLAB\bin> .\dumpperfdata.ps1 -init
+\end{verbatim}
 
  \item PowerShellからジョブの進捗状況ログを確認。
 \begin{verbatim}
 PS E:\VTILLAB> Get-Content log\dumpperfdata.log -Wait
 \end{verbatim}
- \item 上記スクリプトが正常に終了したのを確認後、同様の手順で \\
-       {\tt \$VTILROOT/bin/rollupperfdata.ps1}を実行。
 
- \item タスクの設定。{\tt \$VTILROOT/bin/vtiljob.bat}を定期的に実行する
-       Windowsタスクを作成
+ \item {\tt \$VTILDATA}ディレクトリ(デフォルトでは{\tt \$VTILROOT/data})に収集データが保存されている事を確認。
+ 
+ \item 上記スクリプトが正常に終了したのを確認後、グラフデータ作成スクリプト({\tt rollupperfdata.ps1})を実行 
+\begin{verbatim}
+PS E:\VTILLAB\bin> .\rollupperfdata.ps1 
+\end{verbatim}
+
+ \item {\tt \$VTILVIEW/YYYYMMDD\_HHMMSS}ディレクトリ(デフォルトでは {\tt \$VTILROOT/view}) にグラフデータが保存されている事を確認。
+
+ \item タスクの設定。{\tt \$VTILROOT/bin/vtiljob.bat}内のスクリプトパスを適切に変更した後、定期的に実行するWindowsタスクを作成。
 \end{enumerate}
+
+\subsection{表示期間を指定してのグラフデータの作成（オプション）}
+{\tt rollupdata.ps1}はデフォルトで直近３ヶ月間のグラフデータを作成します。{\tt -start yyyy/mm/dd}引数を指定する事でグラフの表示期間を変更する事ができます。例えば以下のコマンドでは{\tt 2010/10/1}から{\tt 2010/12/31}までのグラフデータを作成します。 
+
+\begin{verbatim}
+PS E:\VTILLAB\bin> .\rollupperfdata.ps1 -start 2010/10/1
+\end{verbatim} 
 
 \subsection{分析チャートの作成} 
 
 事前準備で用意したチャート作成用PCにて以下の作業を行います。
 
 \begin{enumerate}
- \item {\tt Excel 2007}の場合は{\tt
-       \$VTILROOT/report/excel/VTIL\_CapacityAnalysis\_TMPL.xlsm}を、
-       {\tt Excel 2003}の場合は{\tt
-       \$VTILROOT/report/excel/VTIL\_CapacityAnalysis\_TMPL.xls}を、
-       チャート作成PCでオープン
+ \item 以下のファイルをチャート作成PCでオープン。
+   \begin{itemize}
+   \item {\tt Excel 2007}:
+     \begin{quote}
+      {\tt \$VTILROOT/report/excel/VTIL\_CapacityAnalysis\_TMPL.xlsm}
+      \end{quote}
+   \item {\tt Excel 2007}でvCenterに登録されているESXホストの名称がIPアドレス形式(xxx.xxx.xxx.xxx)の場合:
+     \begin{quote}
+      {\tt \$VTILROOT/report/excel/VTIL\_CapacityAnalysis\_TMPL2.xlsm}
+      \end{quote}
+   \item {\tt Excel 2003}:
+      \begin{quote}
+      {\tt \$VTILROOT/report/excel/VTIL\_CapacityAnalysis\_TMPL.xls}
+      \end{quote}
+   \end{itemize}
  \item {\tt CONSOLE}ワークシート内の下記項目を入力
-       \begin{itemize}
-	\item データの保存場所
-	\item キャパシティ分析ブック名
-	\item キャパシティ分析ブックパス
-       \end{itemize}
+ 　\begin{table}[H]
+	\begin{tabular}{ll}
+	\toprule
+	\textbf{フィールド} & \textbf{入力例} \\
+	\midrule
+	グラフデータの保存場所 & {\tt E:/VTILLAB/view/20101001-20101231}\\
+	キャパシティ分析ブック名 & {\tt CapMgmt-2010Q4}\\
+	キャパシティ分析ブックパス & {\tt E:/VTILREPORT}\\
+	\bottomrule
+	\end{tabular}
+　　\end{table}
  \item 同シートにある「キャパシティ分析ブックの作成」ボタンをクリック
 \end{enumerate}
 
-キャパシティ分析ブックは各クラスタ毎に作成されます。初回作成後、データを
-更新するためには、{\tt CONSOLE-<cluster>}シートの「データの更新」ボタ
-ンをクリック。
-
-
 \section{ツールの管理} 
-
 \subsection{データ収集間隔} 
 インストール直後に過去3ヶ月間のおおまかなトレンドを理解するために、初回
 のデータ収集ジョブでは、30分間おきの直近1週間のデータだけでなく、以下
-の間隔でのデータも同時に収集します。
+の間隔でのデータも同時に収集します。（{\tt -init}オプション）
 
 \begin{itemize}
  \item 2時間おきの直近1ヶ月間のデータ

@@ -18,6 +18,10 @@
 $LOG = "$VTILLOG\rollupperfdata.log"
 [xml]$DBINFO = Get-Content $VTILDBINFO
 
+#
+# rollup
+#  Take the array of numeric values and return ($min, $max, $avg)
+#
 function rollup($arr) {
 	$min = $max = $arr[0]
 	$sum = 0
@@ -29,13 +33,20 @@ function rollup($arr) {
 	return $min,$max,($sum/$arr.Length)
 }
 
+#
+# mkdate_daily
+#  Make date value by parsing "YYYY/MM/DD" for daily rollup basis
+#
 function mkdate_daily($day) {
 	get-date -Date ("{0}/{1}/{2}" -f $day.Year,$day.Month,$day.Day)
 }
 
+#
+# build_weekly_list
+#  Build array of last 13 Sundays
+#
 function build_week_list() {
-	$today = Get-Date
-	$sunday = $today.AddDays(-1 * $today.DayOfWeek)
+	$sunday = $VIEWFINISH.AddDays(-1 * $VIEWFINISH.DayOfWeek)
 	$sunday = mkdate_daily($sunday)
 
 	$arr = , $sunday
@@ -47,8 +58,12 @@ function build_week_list() {
 	return $arr
 }
 
+#
+# build_daily_list
+#  Build array of last 92 days
+#
 function build_day_list() {
-	$d = mkdate_daily(Get-Date)
+	$d = mkdate_daily($VIEWFINISH)
 	$arr = , $d
 	foreach($i in 1..91) {
 		$d = $d.AddDays(-1)
@@ -58,17 +73,81 @@ function build_day_list() {
 	return $arr
 }
 
+#
+# for-each CI
+#
+function foreach_ci($root) {
+	Dir $root -Exclude "*.xml","*.csv"
+}
+
+function foreach_cluster {
+	foreach_ci("$VTILDATA\cluster")
+}
+
+function foreach_host($cluster) {
+	foreach_ci("$($cluster.PSPath)\host")
+}
+
+function foreach_vm($cluster) {
+	foreach_ci("$($cluster.PSPath)\vm")
+}
+
+function foreach_perfdata($dir) {
+	Dir "$dir\1day_*.csv","$dir\2hours_*.csv","$dir\30mins_*.csv" -Exclude "*.xml","vm","host"
+}
+
+#
+# format_MB
+#
+function format_MB($v) {
+	if($v) {
+		return "{0}" -f ([float]$v/1024)
+	} 
+	else {
+		return ''
+	}
+}
+
+#
+# Log helper
+#
+function log($str) {
+	"$(Get-Date): $str" | Out-File $LOG -Append -Encoding ASCII
+}
+
+#
+# CSV creation helpers
+#
+function data2view($path) {
+	return $path.Replace($VTILDATA,$VIEWROOT)
+}
+
+function output_csv($dir,$base,$str) {
+	$d = data2view $dir
+	if(-not (Test-Path $d)) {
+		New-Item $d -Type directory | Out-Null
+	}
+	$file = "$d/$base"
+	$str | Out-File $file -Encoding ASCII
+	return $file
+}
+function append_csv($file,$str) {
+	$str | Out-File $file -Encoding ASCII -Append
+}
+
+#
+# weekly_rollup
+#
 function weekly_rollup($ci) {
-	Dir $ci.PSPath -Exclude "*.xml","*.csv" | % {
+	foreach_ci($ci.PSPath) | % {
 		$counter = $_
 		$cpath = $counter.PSPath
-		$file = "$($cpath)\weekly_latest.csv"
-		"time,min,max,avg" | Out-File $file -Encoding ASCII
+		$file = output_csv $cpath "weekly_latest.csv" "time,min,max,avg"
 	
 		$table = @{}		
 		$bitmap = @{}
-		Dir "$($cpath)\1day_*.csv","$($cpath)\2hours_*.csv","$($cpath)\30mins_*.csv" -Exclude "*.xml" | % {
-			"$(Get-Date): $($ci.Name): $($counter.Name): $($_.Name)" | Out-File $LOG -Append -Encoding ASCII
+		foreach_perfdata $cpath | % {
+			log("$($ci.Name): $($counter.Name): $($_.Name)")
 		
 			Import-Csv $_  | % {
 				if(!$bitmap[$_.time]) {
@@ -84,27 +163,29 @@ function weekly_rollup($ci) {
 		$weeks = build_week_list
 		$weeks | % {
 			if(!$table[$_]) {
-				"$(Get-date -date $_ -format d),,," | Out-File $file -Append -Encoding ASCII
+				append_csv $file "$(Get-date -date $_ -format d),,,"
 			}
 			else {
 				($min,$max,$avg) = rollup($table[$_])
-				"$(Get-date -date $_ -format d),$min,$max,$avg" | Out-File $file -Append -Encoding ASCII
+				append_csv $file "$(Get-date -date $_ -format d),$min,$max,$avg"
 			}
 		}
 	}
 }
 
+#
+# daily_rollup
+#
 function daily_rollup($ci) {
-	Dir $ci.PSPath -Exclude "*.xml","*.csv" | % {
+	foreach_ci($ci.PSPath) | % {
 		$counter = $_
 		$cpath = $counter.PSPath
-		$file = "$($cpath)\daily_latest.csv"
-		"time,min,max,avg" | Out-File $file -Encoding ASCII
+		$file = output_csv $cpath "daily_latest.csv" "time,min,max,avg"
 	
 		$table = @{}		
 		$bitmap = @{}
-		Dir "$($cpath)\1day_*.csv","$($cpath)\2hours_*.csv","$($cpath)\30mins_*.csv" -Exclude "*.xml","vm","host" | % {
-			"$(Get-Date): $($ci.Name): $($counter.Name): $($_.Name)" | Out-File $LOG -Append -Encoding ASCII
+		foreach_perfdata $cpath | % {
+			log "$($ci.Name): $($counter.Name): $($_.Name)"
 		
 			Import-Csv $_  | % {
 				if(!$bitmap[$_.time]) {
@@ -118,64 +199,54 @@ function daily_rollup($ci) {
 		$days = build_day_list
 		$days | % {
 			if(!$table[$_]) {
-				"$(Get-date -date $_ -format d),,," | Out-File $file -Append -Encoding ASCII
+				append_csv $file "$(Get-date -date $_ -format d),,,"
 			}
 			else {
 				($min,$max,$avg) = rollup($table[$_])
-				"$(Get-date -date $_ -format d),$min,$max,$avg" | Out-File $file -Append -Encoding ASCII
+				append_csv $file "$(Get-date -date $_ -format d),$min,$max,$avg"
 			}
 		}
 	}
 }
 
-function host_weekly() {
-	Dir "$VTILDATA\cluster" -Exclude "*.xml","*.csv" | % {
-		Dir "$($_.PSPath)\host" -Exclude "*.xml","*.csv" | % {
-			weekly_rollup($_)
-		}
-	}
+#
+# Rollup functions
+#
+function cluster_weekly() { 
+	foreach_cluster | % {weekly_rollup($_)}
+}
+function cluster_daily() { 
+	foreach_cluster | % {daily_rollup($_)}
 }
 
+function host_weekly() { 
+	foreach_cluster | % {foreach_host($_) | % {weekly_rollup($_)}}
+}
 function host_daily() {
-	Dir "$VTILDATA\cluster" -Exclude "*.xml","*.csv" | % {
-		Dir "$($_.PSPath)\host" -Exclude "*.xml","*.csv" | % {
-			daily_rollup($_)
-		}
-	}
+	foreach_cluster | % {foreach_host($_) | % {daily_rollup($_)}}
 }
 
 function vm_weekly {
-	Dir "$VTILDATA\cluster" -Exclude "*.xml","*.csv"| % {
-		Dir "$($_.PSPath)\vm" -Exclude "*.xml","*.csv" | % {
-			weekly_rollup($_)
-		}
-	}
+	foreach_cluster | % {foreach_vm($_) | % {weekly_rollup($_)}}
 }
-
 function vm_daily {
-	Dir "$VTILDATA\cluster" -Exclude "*.xml","*.csv" | % {
-		Dir "$($_.PSPath)\vm" -Exclude "*.xml","*.csv" | % {
-			daily_rollup($_)
-		}
-	}
+	foreach_cluster | % {foreach_vm($_) | % {daily_rollup($_)}}
 }
 
-function cluster_daily {
-	Dir "$VTILDATA\cluster" -Exclude "*.xml","*.csv" | % {
-		daily_rollup($_)
-	}
-}
-
+#
+# cluster_4weeks
+#   Build CSV for past 4 weeks cluster chart
+#
 function cluster_4weeks() {
 	$cntr_4weeks = 'mem.usage.average','cpu.usage.average','disk.usage.average'
-	Dir "$VTILDATA\cluster" -Exclude "*.xml","*.csv" | % {
+	foreach_cluster | % {
 		$cluster = $_
 		$table = @()
-		Dir "$($_.PSPath)\host" -Exclude "*.csv","*.xml" | % {
+		foreach_host($cluster) | % {
 			$esx = $_
 			 $cntr_4weeks | % {
 				$counter = $_
-				Import-Csv "$($esx.PSPath)\$counter\weekly_latest.csv" | % {
+				Import-Csv $(data2view "$($esx.PSPath)\$counter\weekly_latest.csv") | % {
 					$_ | Add-Member -MemberType NoteProperty -Name esx -Value $esx.Name
 					$_ | Add-Member -MemberType NoteProperty -Name counter -Value $counter
 					$table += $_
@@ -185,58 +256,43 @@ function cluster_4weeks() {
 
 		$cntr_4weeks | % {
 			$counter = $_
-
-			$outdir = "$($cluster.PSPath)\$($counter)"
-			if(-not (Test-Path $outdir)) {
-				New-Item $outdir -Type directory | Out-Null
-			}
-			
-			$file = "$outdir\4weeks_latest.csv"
-			"esx,4 weeks ago,3 weeks ago,2 weeks ago,last week" | Out-File $file -Encoding ASCII
+			$file = output_csv "$($cluster.PSPath)\$($counter)" "4weeks_latest.csv" "esx,4 weeks ago,3 weeks ago,2 weeks ago,last week"
 			$table | where {$_.counter -eq $counter} | Group-Object esx | Sort-Object Name | % {
 				$row = "$($_.Name)"
 				$_.Group | Sort-Object time | Select-Object -Last 4 | % {
 					$row += ",$($_.avg)"
 				}
-				$row | Out-File $file -Append -Encoding ASCII
+				append_csv $file $row
 			}
 		}
 	}
 }
 
 function cluster_report() {
-	Dir "$VTILDATA\cluster" -Exclude "*.xml","*.csv" | % {
+	foreach_cluster | % {
 		$cluster = $_
 		$table = @{}
-		
-		"mem.vmmemctl.average","mem.swapused.average" | % {
+				
+		$DBINFO.counters.cluster.counter | % {
 			$counter = $_
-			Dir "$($cluster.PSPath)\host" -Exclude "*.xml","*.csv" | % {
-				$esx = $_
-				$file = "$($esx.PSPath)\$counter\daily_latest.csv"
+			$file = data2view "$($cluster.PSPath)\$($counter.name)\daily_latest.csv"
+			log("$($cluster.Name): $($counter.name)")
+			
+			if(Test-Path $file) { 
 				Import-Csv $file  | % {
 					$t1 = Get-date -Date $_.time
 					$t2 = mkdate_daily($t1)
 					if(!$table[$t2]) {$table[$t2]=@{}}
-					$table[$t2][$counter] += [int]$_.max
-				}			
+					$table[$t2][$counter.name] = $_.avg
+				}
+			} else {
+				# Rollup data doesn't exist in case no clusters exist in the target environment.
+				# In such environment, cluster folder actually is mapped to datacenter object.
+				log("'$($cluster.Name)' is a Datacenter object. No performance data is found.")
 			}
 		}
 		
-		$DBINFO.counters.cluster.counter | % {
-			$counter = $_
-			$file = "$($cluster.PSPath)\$($counter.name)\daily_latest.csv"
-			"$(Get-Date): $($cluster.Name): $($counter.name)" | Out-File $LOG -Append -Encoding ASCII
-			
-			Import-Csv $file  | % {
-				$t1 = Get-date -Date $_.time
-				$t2 = mkdate_daily($t1)
-				if(!$table[$t2]) {$table[$t2]=@{}}
-				$table[$t2][$counter.name] = $_.avg
-			}
-		}
-		
-		Import-Csv "$($cluster.PSPath)\vm_daily_count.csv" | % {
+		Import-Csv $(data2view "$($cluster.PSPath)\vm_daily_count.csv") | % {
 			$t1 = Get-date -Date $_.time
 			$t2 = mkdate_daily($t1)
 			if(!$table[$t2]) {$table[$t2]=@{}}
@@ -244,12 +300,9 @@ function cluster_report() {
 			$table[$t2]['szPowerOnVM'] = $_.memsz
 		}
 
-		$file = "$($cluster.PSPath)\cpu_memory.csv"
-		"Date,Effective CPU (MHz),Effective Mem (MB),Power ON VMs,Power ON VMs Mem (MB),CPU Usage (MHz),CPU Usage (%),Mem Consumed (KB),Mem Overhead (KB),Mem Baloon (MB),Mem Swap (MB)" |
-			Out-File $file -Encoding ASCII
-		
+		$file = output_csv $cluster.PSPath "cpu_memory.csv" "Date,Effective CPU (MHz),Effective Mem (MB),Power ON VMs,Power ON VMs Mem (MB),CPU Usage (MHz),CPU Usage (%),Mem Consumed (KB),Mem Overhead (KB)"		
 		$table.GetEnumerator() | Sort-Object Name | % {
-			"{0},{1},{2},{3},{4},{5},{6},{7},{8},{9},{10}" -f 
+			append_csv $file $("{0},{1},{2},{3},{4},{5},{6},{7},{8}" -f 
 				$(Get-date -date $_.Name -format d),
 				$_.Value['clusterServices.effectivecpu.average'],
 				$_.Value['clusterServices.effectivemem.average'],
@@ -258,66 +311,68 @@ function cluster_report() {
 				$_.Value['cpu.usagemhz.average'],
 				$_.Value['cpu.usage.average'],
 				$_.Value['mem.consumed.average'],
-				$_.Value['mem.overhead.average'],
-				(format_MB($_.Value['mem.vmmemctl.average'])),
-				(format_MB($_.Value['mem.swapused.average'])) | Out-File $file -Append -Encoding ASCII
+				$_.Value['mem.overhead.average'])
 		}
 	}
 }
 
-function format_MB($v) {
-	if($v) {
-		return "{0}" -f ([float]$v/1024)
-	} 
-	else {
-		return ''
-	}
-}
 
 function host_report() {
-	Dir "$VTILDATA\cluster" -Exclude "*.xml","*.csv" | % {
-		Dir "$($_.PSPath)\host" -Exclude "*.csv","*.xml" | % {
+	foreach_cluster | % {
+		#
+		# On-memory table structure for all counters
+		# table[host][time][counter] = {avg, min, max}
+		#
+		$table = @{}		
+		
+		foreach_host($_) | % {
 			$esx = $_
-			$table = @{}		
+			$esxtable = $table[$esx.Name] = @{}
+			
 			$DBINFO.counters.host.counter | % {
 				$counter = $_
-				Dir "$($esx.PSPath)\$($counter.name)\daily_latest.csv" | % {
-					"$(Get-Date): $($esx.Name): $($counter.name): $($_.Name)" | Out-File $LOG -Append -Encoding ASCII
-				
-					Import-Csv $_  | % {
-						$t1 = Get-date -Date $_.time
-						if(!$table[$t1]) {$table[$t1]=@{}}
-						$table[$t1][$counter.name] = @{avg=$_.avg; min=$_.min; max=$_.max;}
-					}
+				log "$($esx.Name): $($counter.name): daily_latest.csv"
+
+				Import-Csv  $(data2view "$($esx.PSPath)\$($counter.name)\daily_latest.csv") | % {
+					$t1 = Get-date -Date $_.time
+					if(!$esxtable[$t1]) {$esxtable[$t1]=@{}}
+					$esxtable[$t1][$counter.name] = @{avg=$_.avg; min=$_.min; max=$_.max;}
 				}
 			}
 
-			$file = "$($esx.PSPath)\cpu_memory.csv"
-			"Date,CPU Usage (MHz), CPU Usage (%),Mem Consumed (KB),Mem Usage (%)" |
-				Out-File $file -Encoding ASCII
+			#
+			# Write cpu_memory.csv
+			#
+			$file = output_csv $esx.PSPath "cpu_memory.csv" $("Date," +
+			"CPU Usage (MHz)," +
+			"CPU Usage (%)," +
+			"Mem Consumed (KB)," +
+			"Mem Usage (%)")
 			
-			$table.GetEnumerator() | Sort-Object Name | % {
-				"{0},{1},{2},{3},{4}" -f 
+			$esxtable.GetEnumerator() | Sort-Object Name | % {
+				append_csv $file $("{0},{1},{2},{3},{4}" -f 
 					$(Get-date -date $_.Name -format d),
 					$_.Value['cpu.usagemhz.average']['avg'],
 					$_.Value['cpu.usage.average']['avg'],
 					$_.Value['mem.consumed.average']['avg'],
-					$_.Value['mem.usage.average']['avg'] | Out-File $file -Append -Encoding ASCII
+					$_.Value['mem.usage.average']['avg'])
 			}
 
-			$file = "$($esx.PSPath)\memory.csv"
-			"Date,Mem Consumed Avg (MB)," +
-			"Mem Consumed Max(MB)," +
+			#
+			# Write memory.csv
+			#
+			$file = output_csv $esx.PSPath "memory.csv" $("Date," +
+			"Mem Consumed Avg (MB)," +
+			"Mem Consumed Max (MB)," +
 			"Mem Consumed Min (MB)," +
 			"Active Memory (MB)," +
 			"Mem Shared Common (MB)," +
 			"Balloon Memory Max (MB)," +
 			"Swap Memory Max (MB)," +
-			"Granted Memory (MB)" |
-				Out-File $file -Encoding ASCII
-			
-			$table.GetEnumerator() | Sort-Object Name | % {
-				"{0},{1},{2},{3},{4},{5},{6},{7},{8}" -f $(Get-date -date $_.Name -format d),
+			"Granted Memory (MB)")
+
+			$esxtable.GetEnumerator() | Sort-Object Name | % {
+				append_csv $file $("{0},{1},{2},{3},{4},{5},{6},{7},{8}" -f $(Get-date -date $_.Name -format d),
 					(format_MB($_.Value['mem.consumed.average']['avg'])),
 					(format_MB($_.Value['mem.consumed.average']['max'])),
 					(format_MB($_.Value['mem.consumed.average']['min'])),
@@ -325,15 +380,21 @@ function host_report() {
 					(format_MB($_.Value['mem.shared.average']['avg'])),
 					(format_MB($_.Value['mem.vmmemctl.average']['max'])),
 					(format_MB($_.Value['mem.swapused.average']['max'])),
-					(format_MB($_.Value['mem.granted.average']['max'])) |
-					Out-File $file -Append -Encoding ASCII
+					(format_MB($_.Value['mem.granted.average']['max'])))
 			}
 
-			$file = "$($esx.PSPath)\disk.csv"
-			"Date,Disk Usage Avg(KB/sec), Disk Usage Max (KB/sec),Disk Usage Min (KB/sec), Disk Read Ratio(%), Disk Write Ratio(%), Disk Total Latency (ms)" |
-				Out-File $file -Encoding ASCII
-			
-			$table.GetEnumerator() | Sort-Object Name | % {
+			#
+			# Write disk.csv
+			#
+			$file = output_csv $esx.PSPath "disk.csv" $("Date," +
+			"Disk Usage Avg (KB/sec)," +
+			"Disk Usage Max (KB/sec)," +
+			"Disk Usage Min (KB/sec)," +
+			"Disk Read Ratio (%)," +
+			"Disk Write Ratio (%)," +
+			"Disk Total Latency (ms)")
+
+			$esxtable.GetEnumerator() | Sort-Object Name | % {
 				$disk_rw = [float]$_.Value['disk.read.average']['avg'] +
 					[float]$_.Value['disk.write.average']['avg']  
 					
@@ -343,20 +404,24 @@ function host_report() {
 					$disk_w = ([float]$_.Value['disk.write.average']['avg'])*100/$disk_rw
 				}
 
-				"{0},{1},{2},{3},{4},{5},{6}" -f $(Get-date -date $_.Name -format d),
+				append_csv $file $("{0},{1},{2},{3},{4},{5},{6}" -f $(Get-date -date $_.Name -format d),
 					$_.Value['disk.usage.average']['avg'],
 					$_.Value['disk.usage.average']['max'],
 					$_.Value['disk.usage.average']['min'],
 					$disk_r, $disk_w,
-					$_.Value['disk.maxtotallatency.latest']['avg'] |
-					Out-File $file -Append -Encoding ASCII
+					$_.Value['disk.maxtotallatency.latest']['avg'])
 			}
 
-			$file = "$($esx.PSPath)\net.csv"
-			"Date,Network Usage Avg(Mbps), Network Usage Max (Mbps),Network Usage Min (Mbps), Receive Ratio(%), Transmit Ratio(%)" |
-				Out-File $file -Encoding ASCII
-			
-			$table.GetEnumerator() | Sort-Object Name | % {
+			#
+			# Write net.csv
+			#
+			$file = output_csv $esx.PSPath "net.csv" $("Date," +
+			"Network Usage Avg (Mbps)," +
+			"Network Usage Max (Mbps)," +
+			"Network Usage Min (Mbps)," +
+			"Receive Ratio (%)," +
+			"Transmit Ratio (%)")
+			$esxtable.GetEnumerator() | Sort-Object Name | % {
 				$net_rw = [float]$_.Value['net.received.average']['avg'] +
 					[float]$_.Value['net.transmitted.average']['avg']  
 					
@@ -366,44 +431,25 @@ function host_report() {
 					$net_w = ([float]$_.Value['net.transmitted.average']['avg'])*100/$net_rw
 				}
 
-				"{0},{1},{2},{3},{4},{5}" -f $(Get-date -date $_.Name -format d),
+				append_csv $file $("{0},{1},{2},{3},{4},{5}" -f $(Get-date -date $_.Name -format d),
 					(format_MB($_.Value['net.usage.average']['avg'])),
 					(format_MB($_.Value['net.usage.average']['max'])),
 					(format_MB($_.Value['net.usage.average']['min'])),
-					$net_r, $net_w |
-					Out-File $file -Append -Encoding ASCII
+					$net_r, $net_w)
 			}
 		}
 	}
 }
 
-function cluster_inventory() {
-	Dir "$VTILDATA\cluster" -Exclude "*.xml","*.csv" | % {
-		$cluster = $_
-		$table = @{}
-		Dir "$($_.PSPath)\host" -Exclude "*.xml","*.csv" | % {
-			$esx = $_
-			[xml]$ei = Get-Content "$($esx.PSPath)\esxinfo.xml"
-			$table[$ei.esx.name] = $ei.esx.CpuTotalMhz, $ei.esx.MemoryTotalMB
-		}
-
-		$file = "$($cluster.PSPath)\vmhosts.csv"
-		"esx,cpu,memory" | Out-File $file -Encoding ASCII
-		$table.GetEnumerator() | sort-object Name | % {
-			"$($_.Name),$($_.Value[0]),$($_.Value[1])" | Out-File $file -Append -Encoding ASCII 
-		}
-	}
-}
-
 function vm_daily_count {
-	Dir "$VTILDATA\cluster" -Exclude "*.xml","*.csv" | % {
+	foreach_cluster | % {
 		$cluster = $_
 		$table = @{}
-		Dir "$($cluster.PSPath)\vm" -Exclude "*.xml","*.csv" | % {
+		foreach_vm $cluster | % {
 			$vm = $_
 			[xml]$vi = Get-Content "$($vm.PSPath)\vminfo.xml"
 			$memsz = [int]$vi.vm.MemoryMB
-			$file = "$($vm.PSPath)\mem.usage.average\daily_latest.csv"
+			$file = data2view "$($vm.PSPath)\mem.usage.average\daily_latest.csv"
 			Import-Csv $file | % {
 				if($_.max -gt 0) {
 					if(!$table[$_.time]) {$table[$_.time] = @{count=0; memsz=0;}}
@@ -412,17 +458,15 @@ function vm_daily_count {
 				}
 			}
 		}
-		$file = "$($cluster.PSPath)\vm_daily_count.csv"
-		"time,count,memsz" | Out-File $file -Encoding ASCII
+		$file = output_csv $cluster.PSPath "vm_daily_count.csv" "time,count,memsz"
 		$table.GetEnumerator() | Sort-Object Name | Select-Object -Last 92 | % {
-			"$(Get-date -date $_.Name -format d),$($_.Value.count),$($_.Value.memsz)" | 
-				Out-File $file -Append -Encoding ASCII
+			append_csv $file "$(Get-date -date $_.Name -format d),$($_.Value.count),$($_.Value.memsz)"
 		}
 	}
 }
 
 function vm_cpu_breakdown {
-	Dir "$VTILDATA\cluster" -Exclude "*.xml","*.csv" | % {
+	foreach_cluster  | % {
 		$cluster = $_
 		$table = @{}
 		1,2,4,8 | % {
@@ -432,12 +476,12 @@ function vm_cpu_breakdown {
 				$table[$vcpu][$_] = @{sum=0; cnt=0; cr_sum=0; cr_cnt=0}
 			}
 		}
-		Dir "$($cluster.PSPath)\vm" -Exclude "*.xml","*.csv" | % {
+		foreach_vm $cluster  | % {
 			$vm = $_
 			[xml]$vi = Get-Content "$($vm.PSPath)\vminfo.xml"
 			$vcpu = [int]$vi.vm.NumCpu
 			
-			$file = "$($vm.PSPath)\cpu.usage.average\daily_latest.csv"
+			$file = data2view "$($vm.PSPath)\cpu.usage.average\daily_latest.csv"
 			Import-Csv $file | % {
 				if($_.avg) {
 					$t1 = mkdate_daily(Get-Date -date $_.time)
@@ -445,7 +489,7 @@ function vm_cpu_breakdown {
 					$table[$vcpu][$t1].cnt += 1
 				}
 			}
-			$file = "$($vm.PSPath)\cpu.ready.summation\daily_latest.csv"
+			$file = data2view "$($vm.PSPath)\cpu.ready.summation\daily_latest.csv"
 			Import-Csv $file | % {
 				if($_.avg) {
 					$t1 = mkdate_daily(Get-Date -date $_.time)
@@ -454,8 +498,7 @@ function vm_cpu_breakdown {
 				}
 			}
 		}
-		$file = "$($cluster.PSPath)\vm_cpu_breakdown.csv"
-		"cpu,min,max,avg,cpuready" | Out-File $file -Encoding ASCII
+		$file = output_csv $cluster.PSPath "vm_cpu_breakdown.csv" "cpu,min,max,avg,cpuready"
 		1,2,4,8 | %{
 			$vcpu = $_
 			$min = 100
@@ -474,23 +517,67 @@ function vm_cpu_breakdown {
 				}
 			}
 			if($cnt -gt 0 -and $cr_cnt -gt 0) {
-				"$($vcpu),$min,$max,$($sum/$cnt),$($cr_sum/$cr_cnt)" | 
-						Out-File $file -Append -Encoding ASCII
+				append_csv $file "$($vcpu),$min,$max,$($sum/$cnt),$($cr_sum/$cr_cnt)"
 			}
 			else {
-				"$($vcpu),,,," | Out-File $file -Append -Encoding ASCII
+				append_csv $file "$($vcpu),,,,"
 			}
 		}
 	}
 }
 
-host_daily
-host_weekly
-vm_daily
-vm_daily_count
-vm_cpu_breakdown
-cluster_daily
-cluster_4weeks
+# Determine view tree root
+$VIEWFINISH = Get-date
+$VIEWSTART = $VIEWFINISH.AddDays(-1 * 91)
+ 
+if ($args[0] -eq "-start") {
+	$VIEWSTART = Get-Date -Date $args[1]
+	$VIEWFINISH = $VIEWSTART.AddDays(91)
+}
 
+$VIEWROOT = "$VTILVIEW\{0:D4}{1:D2}{2:D2}-{3:D4}{4:D2}{5:D2}" -f 
+	$VIEWSTART.Year, $VIEWSTART.Month, $VIEWSTART.Day, 
+	$VIEWFINISH.Year, $VIEWFINISH.Month, $VIEWFINISH.Day 
+
+host_daily
+# >> HOST/COUNTER/daily_latest.csv
+
+host_weekly
+# >> HOST/COUNTER/weekly_latest.csv
+
+cluster_daily
+# >> CLUSTER/COUNTER/daily_latest.csv
+
+vm_daily
+# >> CLUSTER/VM/daily_latest.csv
+
+# << CLUSTER/VM/mem.usage.average/daily_latest.csv
+vm_daily_count
+# >> CLUSTER/vm_daily_count.csv
+
+# << HOST/COUNTER/daily_latest.csv
 host_report
+# >> *HOST/cpu_memory.csv
+# >> *HOST/memory.csv
+# >> *HOST/disk.csv
+# >> *HOST/net.csv
+
+# << CLUSTER/COUNTER/daily_latest.csv
+# << CLUSTER/vm_daily_count.csv
 cluster_report
+# >> *CLUSTER/cpu_memory.csv
+
+# << CLUSTER/HOST/COUNTER/weekly_latest.csv
+cluster_4weeks
+# >> *CLUSTER/cpu.usage.average/4weeks_latest.csv
+# >> *CLUSTER/mem.usage.average/4weeks_latest.csv
+# >> *CLUSTER/disk.usage.average/4weeks_latest.csv
+
+# << CLUSTER/VM/cpu.usage.average/daily_latest.csv
+# << CLUSTER/VM/cpu.ready.summation/daily_latest.csv
+vm_cpu_breakdown
+# >> *CLUSTER/vm_cpu_breakdown.csv
+
+
+
+
