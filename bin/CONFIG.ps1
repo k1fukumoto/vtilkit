@@ -13,15 +13,15 @@
 #######################################################################################
 
 # Install location
-$VTILROOT = 'C:\VTILLAB\SVN'
+$VTILROOT = 'C:\Users\kaoru\vtilkit'
 # vCenter name or IP address
-$VTILVC = "172.16.180.30"
+$VTILVC = '10.149.64.72'
 # vCenter data collection user name
-$VTILVCUSER = "Administrator"
+$VTILVCUSER = 'Administrator'
 
 # Data archive information
-$VTILDATA = "C:\VTILLAB\1.5\data"
-$VTILVIEW = "C:\VTILLAB\1.5\view"
+$VTILDATA = "$VTILROOT\data"
+$VTILVIEW = "$VTILROOT\view"
 # Target performance counters
 $VTILDBINFO = "$VTILROOT\etc\counters.xml"
 # Log file location
